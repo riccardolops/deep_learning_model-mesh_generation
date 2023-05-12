@@ -77,8 +77,8 @@ if __name__ == "__main__":
 
     # start wandb
     wandb.init(
-        project="alveolar_canal",
-        entity="maxillo",
+        project="segment_task",
+        #entity="maxillo",
         config=unmunchify(config)
     )
 
@@ -153,11 +153,14 @@ if __name__ == "__main__":
         raise SystemExit
 
 
-    best_val = float('-inf')
+    best_val = {
+        'value': float('-inf'),
+        'epoch': -1
+    }
     best_test = {
-            'value': float('-inf'),
-            'epoch': -1
-            }
+        'value': float('-inf'),
+        'epoch': -1
+    }
 
 
     # Train the model
@@ -183,25 +186,21 @@ if __name__ == "__main__":
                 else:
                     experiment.scheduler.step(epoch)
 
-            if epoch % 5 == 0:
-                test_iou, test_dice = experiment.test(phase="Test")
-                logging.info(f'Epoch {epoch} Test IoU: {test_iou}')
-                logging.info(f'Epoch {epoch} Test Dice: {test_dice}')
+            if epoch % 1 == 0:
+                experiment.predict_series(phase='Validation', rnd=True)
 
-                if test_iou > best_test['value']:
-                    best_test['value'] = test_iou
-                    best_test['epoch'] = epoch
 
             experiment.save('last.pth')
 
-            if val_iou > best_val:
-                best_val = val_iou
+            if val_iou > best_val['value']:
+                best_val['value'] = val_iou
+                best_val['epoch'] = epoch
                 experiment.save('best.pth')
 
             experiment.epoch += 1
 
         logging.info(f'''
-                Best test IoU found: {best_test['value']} at epoch: {best_test['epoch']}
+                Best validation IoU found: {best_val['value']} at epoch: {best_val['epoch']}
                 ''')
 
     # Test the model
@@ -216,6 +215,13 @@ if __name__ == "__main__":
         logging.info('Doing inference...')
         experiment.load()
         experiment.inference(os.path.join(config.data_loader.dataset,'SPARSE'))
+        # experiment.inference('/homes/llumetti/out')
+
+    # Do the prediction
+    if config.trainer.do_prediction:
+        logging.info('Doing prediction...')
+        experiment.predict(config.trainer.predict)
+        # experiment.predict_series()
         # experiment.inference('/homes/llumetti/out')
 
 # TODO: add a Final test metric

@@ -16,6 +16,7 @@ import torchio as tio
 import torch.distributed as dist
 import torch.utils.data as data
 import wandb
+import nibabel as nib
 
 from torch import nn
 from os import path
@@ -24,7 +25,7 @@ from torch.utils.data import DistributedSampler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataloader.Maxillo import Maxillo
+from dataloader.Heart import Heart
 from dataloader.AugFactory import AugFactory
 from losses.LossFactory import LossFactory
 from models.ModelFactory import ModelFactory
@@ -41,8 +42,6 @@ class Experiment:
         self.metrics = {}
 
         filename = 'splits.json'
-        if self.debug:
-            filename = 'splits.json.small'
 
         num_classes = len(self.config.data_loader.labels)
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
@@ -69,6 +68,7 @@ class Experiment:
         sched_milestones = self.config.lr_scheduler.get('milestones', None)
         sched_gamma = self.config.lr_scheduler.get('factor', None)
 
+
         self.scheduler = SchedulerFactory(
                 sched_name,
                 self.optimizer,
@@ -85,7 +85,7 @@ class Experiment:
         # load evaluator
         self.evaluator = Evaluator(self.config, skip_dump=True)
 
-        self.train_dataset = Maxillo(
+        self.train_dataset = Heart(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='train',
@@ -96,36 +96,26 @@ class Experiment:
                     ]),
                 # dist_map=['sparse','dense']
         )
-        self.val_dataset = Maxillo(
+        self.val_dataset = Heart(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='val',
                 transform=self.config.data_loader.preprocessing,
                 # dist_map=['sparse', 'dense']
         )
-        self.test_dataset = Maxillo(
+        self.test_dataset = Heart(
                 root=self.config.data_loader.dataset,
                 filename=filename,
                 splits='test',
                 transform=self.config.data_loader.preprocessing,
                 # dist_map=['sparse', 'dense']
         )
-        self.synthetic_dataset = Maxillo(
-                root=self.config.data_loader.dataset,
-                filename=filename,
-                splits='synthetic',
-                transform=self.config.data_loader.preprocessing,
-                # dist_map=['sparse', 'dense'],
-        ) 
-
-        # self.test_aggregator = self.train_dataset.get_aggregator(self.config.data_loader)
-        # self.synthetic_aggregator = self.synthetic_dataset.get_aggregator(self.config.data_loader)
 
         # queue start loading when used, not when instantiated
         self.train_loader = self.train_dataset.get_loader(self.config.data_loader)
         self.val_loader = self.val_dataset.get_loader(self.config.data_loader)
         self.test_loader = self.test_dataset.get_loader(self.config.data_loader)
-        self.synthetic_loader = self.synthetic_dataset.get_loader(self.config.data_loader)
+
 
         if self.config.trainer.reload:
             self.load()
@@ -162,9 +152,12 @@ class Experiment:
         if 'metrics' in state.keys():
             self.metrics = state['metrics']
 
-    def extract_data_from_patch(self, patch):
+    def extract_data_from_patch(self, patch, phase=None):
         volume = patch['data'][tio.DATA].float().cuda()
-        gt = patch['dense'][tio.DATA].float().cuda()
+        if phase=='Test':
+            gt = []
+        else:
+            gt = patch['dense'][tio.DATA].float().cuda()
 
         if 'Generation' in self.__class__.__name__:
             sparse = patch['sparse'][tio.DATA].float().cuda()
@@ -185,9 +178,6 @@ class Experiment:
         self.evaluator.reset_eval()
 
         data_loader = self.train_loader
-        if self.config.data_loader.training_set == 'generated':
-            logging.info('using the generated dataset')
-            data_loader = self.synthetic_loader
 
         losses = []
         for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'Train epoch {str(self.epoch)}'):
@@ -291,4 +281,139 @@ class Experiment:
             })
 
             return epoch_iou, epoch_dice
-                                
+
+    def _nifti_reader(self, path):
+        data = torch.from_numpy(nib.load(path).get_fdata()).float()
+        affine = torch.eye(4, requires_grad=False)
+        return data, affine
+
+    def predict(self, path_origin):
+        # TODO: Redo but only for one image
+        self.model.eval()
+        with torch.inference_mode():
+            dataset = self.train_dataset
+            subject_dict = {
+                'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin, reader=self._nifti_reader)),
+                'dense': tio.LabelMap(path_origin, reader=self._nifti_reader),
+            }
+            subject = tio.Subject(**subject_dict)
+            sampler = tio.inference.GridSampler(
+                subject,
+                self.config.data_loader.patch_shape,
+                0
+            )
+            loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
+            aggregator = tio.inference.GridAggregator(sampler)
+
+            for j, patch in enumerate(loader):
+                images, gt, emb_codes = self.extract_data_from_patch(patch, phase='Test')
+                preds = self.model(images, emb_codes)
+                aggregator.add_batch(preds, patch[tio.LOCATION])
+
+            output = aggregator.get_output_tensor()
+
+            output = output.squeeze(0)
+            output = (output > 0.5)
+            output_img = nib.Nifti1Image(output.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
+            save_path = os.path.join(self.config.project_dir, self.config.title, 'output')
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            filename = os.path.basename(path_origin)
+            path = os.path.join(save_path, filename)
+            nib.save(output_img, path)
+
+    def predict_series(self, phase, rnd=None):
+        # TODO: Fix saving to correct dimensions
+        self.model.eval()
+        with torch.inference_mode():
+            if phase == 'Train':
+                dataset = self.train_dataset
+            elif phase == 'Validation':
+                dataset = self.val_dataset
+            elif phase == 'Test':
+                dataset = self.test_dataset
+
+            if rnd==True:
+                subject = random.choice(dataset)
+                sampler = tio.inference.GridSampler(subject, self.config.data_loader.patch_shape, 0)
+                loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
+                aggregator = tio.inference.GridAggregator(sampler)
+                gt_aggregator = tio.inference.GridAggregator(sampler)
+                img_aggregator = tio.inference.GridAggregator(sampler)
+
+                for j, patch in enumerate(loader):
+                    images, gt, emb_codes = self.extract_data_from_patch(patch, phase=phase)
+                    preds = self.model(images, emb_codes)
+                    img_aggregator.add_batch(images, patch[tio.LOCATION])
+                    aggregator.add_batch(preds, patch[tio.LOCATION])
+                    gt_aggregator.add_batch(gt, patch[tio.LOCATION])
+
+                image = img_aggregator.get_output_tensor()
+                output = aggregator.get_output_tensor()
+                gt = gt_aggregator.get_output_tensor()
+                gt = gt.squeeze(0)
+                output = output.squeeze(0)
+                output = (output > 0.5)
+                image = image.squeeze(0)
+                class_labels = {
+                    0: "background",
+                    1: "foreground"
+                }
+                wandb_out_logs = []
+                wandb_img_logs = []
+
+                image = image.numpy()
+                output = output.numpy()
+                gt = gt.numpy()
+
+                for img_slice_no in range(min(image.shape)):
+                    img = image[:, :, img_slice_no]
+                    out = output[:, :, img_slice_no]
+                    gtt = gt[:, :, img_slice_no]
+
+                    # append the image to wandb_img_list to visualize
+                    # the slices interactively in W&B dashboard
+                    wandb_img_logs.append(wandb.Image(img, caption=f"Slice: {img_slice_no}"))
+
+                    # append the image and masks to wandb_mask_logs
+                    # to see the masks overlayed on the original image
+                    wandb_out_logs.append(wandb.Image(img, masks={
+                        "predictions": {
+                            "mask_data": out,
+                            "class_labels": class_labels
+                        },
+                        "ground_truth": {
+                            "mask_data": gtt,
+                            "class_labels": class_labels
+                        }
+                    }))
+
+                wandb.log({"Image": wandb_img_logs})
+                wandb.log({"Output mask": wandb_out_logs})
+
+            else:
+                for i, subject in tqdm(enumerate(dataset), total=len(dataset), desc=f'Saving predictions.'):
+                    sampler = tio.inference.GridSampler(
+                        subject,
+                        self.config.data_loader.patch_shape,
+                        0
+                    )
+                    loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
+                    aggregator = tio.inference.GridAggregator(sampler)
+
+                    for j, patch in enumerate(loader):
+                        images, gt, emb_codes = self.extract_data_from_patch(patch, phase='Test')
+                        preds = self.model(images, emb_codes)
+                        aggregator.add_batch(preds, patch[tio.LOCATION])
+
+                    output = aggregator.get_output_tensor()
+
+                    output = output.squeeze(0)
+                    output = (output > 0.5)
+                    path_origin = os.path.join(self.config.data_loader.dataset, subject.patient['image'][2:])
+                    output_img = nib.Nifti1Image(output.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
+                    save_path = os.path.join(self.config.project_dir, self.config.title, 'output')
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
+                    path = os.path.join(save_path, (subject.patient['image'][11:]))
+                    nib.save(output_img, path)
