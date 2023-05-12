@@ -1,22 +1,16 @@
-Improving Segmentation of the Inferior Alveolar Nerve through Deep Label Propagation
+Deep Learning Model Generation
 ========
+<!---
 <figure>
  <img style="float: left" src="imgs/frontside.jpg" alt="Side view" width="100%">
  <figcaption><em>Front and side views of a densely annotated IAN</em></figcaption>
 </figure>
+-->
 
 
 ## Introduction
-This repository contains the material from the paper "Improving Segmentation of
-the Inferior Alveolar Nerve through Deep Label Propagation". In particular, this
-repo is dedicated to the 3D neural networks used to generate and segment the
-Inferior Alveolar Nerve (IAN).
-This nerve is oftentimes in close relation
-to the roots of molars, and its position must thus be carefully
-detailed before the surgical removal. As avoiding contact
-with the IAN is a primary concern during these operations,
-segmentation plays a key role in surgical preparations.
-
+To do
+<!---
 ## Citing our work
 [BibText](https://federicobolelli.it/pub_files/2022cvpr.html)
 
@@ -37,13 +31,13 @@ the dataset. Also look at
 [this](https://github.com/AImageLab-zip/New-Maxillo-Dataset-Segmentation) which
 has the code to generate the naive dense labels starting from the sparse
 annotations (Circular Expansion)
-
+-->
 ## How to run
 Clone this repository, create a python env for the project (optional) and
 activate it. Then install all the dependencies with pip
 ```
-git clone git@github.com:AImageLab-zip/alveolar_canal.git
-cd alveolar_canal
+git clone git@github.com:riccardolops/deep_learning_model-mesh_generation.git
+cd deep_learning_model-mesh_generation
 python -m venv env
 source env/bin/activate
 pip install -r requirements.txt
@@ -75,7 +69,8 @@ tasks, the best config file is provided:
 Execute `main.py` with these 3 configs in this order to reproduce our results
 
 ## Checkpoints
-Download the pre-trained checkpoints [here](https://ditto.ing.unimore.it/maxillo/download/checkpoints)
+To do:
+Download the pre-trained checkpoints [here](http://www.example.com/)
 
 
 ### experiment.yaml
@@ -95,7 +90,7 @@ experiment:
   name: Generation
 
 data_loader:
-  dataset: /path/to/maxillo
+  dataset: /path/to/dataset
   # null to use training_set, generated to used the generated dataset
   training_set: null
   # which augmentations to use, see: augmentations.yaml
