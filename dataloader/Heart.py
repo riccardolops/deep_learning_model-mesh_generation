@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torchio as tio
+from utils.utils import numpy_reader
 
 from torch.utils.data import DataLoader
 
@@ -28,11 +29,6 @@ class Heart(tio.SubjectsDataset):
         subjects_list = self._get_subjects_list(root, filename, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
 
-    def _numpy_reader(self, path):
-        data = torch.from_numpy(nib.load(path).get_fdata()).float()
-        affine = torch.eye(4, requires_grad=False)
-        return data, affine
-
     def _get_subjects_list(self, root, filename, splits, dist_map=None):
         splits_path = root / filename
 
@@ -54,8 +50,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -66,8 +62,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -78,8 +74,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")

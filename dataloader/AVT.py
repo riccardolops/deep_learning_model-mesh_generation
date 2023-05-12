@@ -17,7 +17,7 @@ class AVT(tio.SubjectsDataset):
     https://multicenteraorta.grand-challenge.org/multicenteraorta/
     """
 
-    def __init__(self, root, filename, splits, transform=None, dist_map=None, **kwargs):
+    def __init__(self, root, splits, transform=None, dist_map=None, **kwargs):
         if type(dist_map) == str:
             dist_map = [dist_map]
 
@@ -25,7 +25,7 @@ class AVT(tio.SubjectsDataset):
         if not isinstance(splits, list):
             splits = [splits]
 
-        subjects_list = self._get_subjects_list(root, filename, splits, dist_map)
+        subjects_list = self._get_subjects_list(root, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
 
     def _numpy_reader(self, path):
@@ -33,12 +33,7 @@ class AVT(tio.SubjectsDataset):
         affine = torch.eye(4, requires_grad=False)
         return data, affine
 
-    def _get_subjects_list(self, root, filename, splits, dist_map=None):
-        splits_path = root / filename
-
-        with open(splits_path) as splits_file:
-            json_splits = json.load(splits_file)
-
+    def _get_subjects_list(self, root, splits, dist_map=None):
         with open('/homes/rlops/alveolar_canal/Task02_Heart/dataset.json') as dataset_file:
             json_dataset = json.load(dataset_file)
 
