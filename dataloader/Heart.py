@@ -2,6 +2,7 @@ import json
 import logging
 import logging.config
 from pathlib import Path
+import os
 
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ class Heart(tio.SubjectsDataset):
     TODO: Add more information about the dataset
     """
 
-    def __init__(self, root, filename, splits, transform=None, dist_map=None, **kwargs):
+    def __init__(self, root, splits, transform=None, dist_map=None, **kwargs):
         if type(dist_map) == str:
             dist_map = [dist_map]
 
@@ -26,16 +27,12 @@ class Heart(tio.SubjectsDataset):
         if not isinstance(splits, list):
             splits = [splits]
 
-        subjects_list = self._get_subjects_list(root, filename, splits, dist_map)
+        subjects_list = self._get_subjects_list(root, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
 
-    def _get_subjects_list(self, root, filename, splits, dist_map=None):
-        splits_path = root / filename
+    def _get_subjects_list(self, root, splits, dist_map=None):
 
-        with open(splits_path) as splits_file:
-            json_splits = json.load(splits_file)
-
-        with open('/homes/rlops/alveolar_canal/Task02_Heart/dataset.json') as dataset_file:
+        with open(os.path.join(root, 'dataset.json')) as dataset_file:
             json_dataset = json.load(dataset_file)
 
         if dist_map is None:

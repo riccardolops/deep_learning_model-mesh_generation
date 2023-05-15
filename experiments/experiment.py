@@ -25,7 +25,7 @@ from torch.utils.data import DistributedSampler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataloader.Heart import Heart
+from dataloader.DatasetFactory import DatasetFactory
 from dataloader.AugFactory import AugFactory
 from losses.LossFactory import LossFactory
 from models.ModelFactory import ModelFactory
@@ -70,14 +70,14 @@ class Experiment:
 
 
         self.scheduler = SchedulerFactory(
-                sched_name,
-                self.optimizer,
-                milestones=sched_milestones,
-                gamma=sched_gamma,
-                mode='max',
-                verbose=True,
-                patience=15
-            ).get()
+            sched_name,
+            self.optimizer,
+            milestones=sched_milestones,
+            gamma=sched_gamma,
+            mode='max',
+            verbose=True,
+            patience=15
+        ).get()
 
         # load loss
         self.loss = LossFactory(self.config.loss.name, self.config.data_loader.labels)
@@ -85,31 +85,31 @@ class Experiment:
         # load evaluator
         self.evaluator = Evaluator(self.config, skip_dump=True)
 
-        self.train_dataset = Heart(
-                root=self.config.data_loader.dataset,
-                filename=filename,
-                splits='train',
-                transform=tio.Compose([
-                    tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0),
-                    self.config.data_loader.preprocessing,
-                    self.config.data_loader.augmentations,
-                    ]),
-                # dist_map=['sparse','dense']
-        )
-        self.val_dataset = Heart(
-                root=self.config.data_loader.dataset,
-                filename=filename,
-                splits='val',
-                transform=self.config.data_loader.preprocessing,
-                # dist_map=['sparse', 'dense']
-        )
-        self.test_dataset = Heart(
-                root=self.config.data_loader.dataset,
-                filename=filename,
-                splits='test',
-                transform=self.config.data_loader.preprocessing,
-                # dist_map=['sparse', 'dense']
-        )
+        self.train_dataset = DatasetFactory(
+            dataset_name=self.config.data_loader.dataset_name,
+            root=self.config.data_loader.dataset,
+            splits='train',
+            transform=tio.Compose([
+                tio.CropOrPad(self.config.data_loader.resize_shape, padding_mode=0),
+                self.config.data_loader.preprocessing,
+                self.config.data_loader.augmentations,
+                ]),
+            # dist_map=['sparse','dense']
+        ).get()
+        self.val_dataset = DatasetFactory(
+            dataset_name=self.config.data_loader.dataset_name,
+            root=self.config.data_loader.dataset,
+            splits='val',
+            transform=self.config.data_loader.preprocessing,
+            # dist_map=['sparse', 'dense']
+        ).get()
+        self.test_dataset = DatasetFactory(
+            dataset_name=self.config.data_loader.dataset_name,
+            root=self.config.data_loader.dataset,
+            splits='test',
+            transform=self.config.data_loader.preprocessing,
+            # dist_map=['sparse', 'dense']
+        ).get()
 
         # queue start loading when used, not when instantiated
         self.train_loader = self.train_dataset.get_loader(self.config.data_loader)

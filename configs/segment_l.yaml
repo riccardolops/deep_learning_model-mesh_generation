@@ -1,5 +1,5 @@
 title: log_image_ok
-project_dir: '/homes/rlops/segment_task'
+project_dir: '/home/rlops/dlms'
 seed: 42
 
 experiment:

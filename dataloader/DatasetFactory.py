@@ -8,4 +8,12 @@ class DatasetFactory:
     def get(self):
         if self.dataset_name == 'AVT':
             from .AVT import AVT
-            return AVT()
+            return AVT(self.root, self.splits, self.transform)
+        elif self.dataset_name == 'Heart':
+            from .Heart import Heart
+            return Heart(self.root, self.splits, self.transform)
+        elif self.dataset_name == 'Maxillo':
+            from .Maxillo import Maxillo
+            return Maxillo(self.root, self.filename, self.splits, self.transform)
+        else:
+            raise ValueError(f'Missing dataset: {self.dataset_name} ')

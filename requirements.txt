@@ -61,3 +61,4 @@ Werkzeug
 wrapt
 xlrd
 zipp
+pynrrd
