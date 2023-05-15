@@ -1,11 +1,13 @@
 import json
 import logging
 import logging.config
+import os
 from pathlib import Path
 
 import numpy as np
 import torch
 import torchio as tio
+from utils.utils import nrrd_reader
 
 from torch.utils.data import DataLoader
 
@@ -28,13 +30,8 @@ class AVT(tio.SubjectsDataset):
         subjects_list = self._get_subjects_list(root, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
 
-    def _numpy_reader(self, path):
-        data = torch.from_numpy(nib.load(path).get_fdata()).float()
-        affine = torch.eye(4, requires_grad=False)
-        return data, affine
-
     def _get_subjects_list(self, root, splits, dist_map=None):
-        with open('/homes/rlops/alveolar_canal/Task02_Heart/dataset.json') as dataset_file:
+        with open(os.path.join(root, 'dataset.json')) as dataset_file:
             json_dataset = json.load(dataset_file)
 
         if dist_map is None:
@@ -43,14 +40,14 @@ class AVT(tio.SubjectsDataset):
         subjects = []
         for split in splits:
             if split=='train':
-                dataset = json_dataset['training'][:10]
+                dataset = json_dataset['training'][:34]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -61,8 +58,8 @@ class AVT(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -73,8 +70,8 @@ class AVT(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=self._numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=self._numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")

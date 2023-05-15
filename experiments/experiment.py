@@ -282,19 +282,18 @@ class Experiment:
 
             return epoch_iou, epoch_dice
 
-    def _nifti_reader(self, path):
-        data = torch.from_numpy(nib.load(path).get_fdata()).float()
-        affine = torch.eye(4, requires_grad=False)
-        return data, affine
-
     def predict(self, path_origin):
         # TODO: Redo but only for one image
         self.model.eval()
         with torch.inference_mode():
-            dataset = self.train_dataset
+            datafile = os.path.splitext(path_origin)[1]
+            if datafile == '.nrrd':
+                from utils.utils import nrrd_reader as ex_reader
+            elif datafile == '.nii.gz':
+                from utils.utils import nib_reader as ex_reader
             subject_dict = {
-                'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin, reader=self._nifti_reader)),
-                'dense': tio.LabelMap(path_origin, reader=self._nifti_reader),
+                'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin, reader=ex_reader)),
+                'dense': tio.LabelMap(path_origin, reader=ex_reader),
             }
             subject = tio.Subject(**subject_dict)
             sampler = tio.inference.GridSampler(

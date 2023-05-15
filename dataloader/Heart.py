@@ -7,7 +7,7 @@ import os
 import numpy as np
 import torch
 import torchio as tio
-from utils.utils import numpy_reader
+from utils.utils import nib_reader
 
 from torch.utils.data import DataLoader
 
@@ -47,8 +47,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -59,8 +59,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -71,8 +71,8 @@ class Heart(tio.SubjectsDataset):
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=numpy_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=numpy_reader),
+                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
+                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")

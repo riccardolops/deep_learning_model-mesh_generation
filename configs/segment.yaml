@@ -6,8 +6,8 @@ experiment:
   name: Segmentation
 
 data_loader:
-  dataset_name: Heart
-  dataset: /homes/rlops/alveolar_canal/Task02_Heart
+  dataset_name: AVT
+  dataset: /homes/rlops/Aortic_Vessel_Tree
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
@@ -22,9 +22,9 @@ data_loader:
   - 80
   - 80
   resize_shape:
-  - 100
-  - 220
-  - 220
+  - 1140
+  - 512
+  - 512
   sampler_type: grid
   grid_overlap: 0
   volumes_max: 2100
