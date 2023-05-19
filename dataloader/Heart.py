@@ -7,7 +7,6 @@ import os
 import numpy as np
 import torch
 import torchio as tio
-from utils.utils import nib_reader
 
 from torch.utils.data import DataLoader
 
@@ -32,7 +31,7 @@ class Heart(tio.SubjectsDataset):
 
     def _get_subjects_list(self, root, splits, dist_map=None):
 
-        with open(os.path.join(root, 'dataset.json')) as dataset_file:
+        with open(os.path.join(root, 'dataset_new.json')) as dataset_file:
             json_dataset = json.load(dataset_file)
 
         if dist_map is None:
@@ -41,38 +40,41 @@ class Heart(tio.SubjectsDataset):
         subjects = []
         for split in splits:
             if split=='train':
-                dataset = json_dataset['training'][:10]
+                dataset = json_dataset[:10]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
             elif split == 'val':
-                dataset = json_dataset['training'][-10:]
+                dataset = json_dataset[-10:]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
             elif split=='test':
-                dataset = json_dataset['training'][-10:]
+                dataset = json_dataset[-10:]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nib_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nib_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")

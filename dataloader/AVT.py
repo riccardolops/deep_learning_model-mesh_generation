@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import torch
 import torchio as tio
-from utils.utils import nrrd_reader
 
 from torch.utils.data import DataLoader
 
@@ -20,6 +19,7 @@ class AVT(tio.SubjectsDataset):
     """
 
     def __init__(self, root, splits, transform=None, dist_map=None, **kwargs):
+        print('init')
         if type(dist_map) == str:
             dist_map = [dist_map]
 
@@ -31,7 +31,7 @@ class AVT(tio.SubjectsDataset):
         super().__init__(subjects_list, transform, **kwargs)
 
     def _get_subjects_list(self, root, splits, dist_map=None):
-        with open(os.path.join(root, 'dataset.json')) as dataset_file:
+        with open(os.path.join(root, 'dataset_new.json')) as dataset_file:
             json_dataset = json.load(dataset_file)
 
         if dist_map is None:
@@ -40,38 +40,41 @@ class AVT(tio.SubjectsDataset):
         subjects = []
         for split in splits:
             if split=='train':
-                dataset = json_dataset['training'][:34]
+                dataset = json_dataset[:1]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
             elif split == 'val':
-                dataset = json_dataset['training'][-10:]
+                dataset = json_dataset[-1:]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
             elif split=='test':
-                dataset = json_dataset['training'][-10:]
+                dataset = json_dataset[-1:]
                 for patient in dataset:
                     # TODO: add naive volume
                     subject_dict = {
                         'partition': split,
                         'patient': patient,
-                        'data': tio.ScalarImage(root / patient['image'], reader=nrrd_reader),
-                        'dense': tio.LabelMap(root / patient['label'], reader=nrrd_reader),
+                        'data': tio.ScalarImage(root / patient['image']),
+                        'dense': tio.LabelMap(root / patient['label']),
+                        'dist': tio.ScalarImage(root / patient['distance']),
                     }
                     subjects.append(tio.Subject(**subject_dict))
                 print(f"Loaded {len(subjects)} patients for split {split}")
@@ -95,7 +98,7 @@ class AVT(tio.SubjectsDataset):
             num_workers=config.num_workers,
             shuffle_subjects=True,
             shuffle_patches=True,
-            start_background=False,
+            start_background=True,
         )
         loader = DataLoader(queue, batch_size=config.batch_size, num_workers=0, pin_memory=True)
         return loader

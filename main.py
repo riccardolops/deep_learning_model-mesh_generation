@@ -30,14 +30,16 @@ import wandb
 from experiments.ExperimentFactory import ExperimentFactory
 from dataloader.AugFactory import AugFactory
 
+
 # used to generate random names that will be appended to the
 # experiment name
 def timehash():
     t = time.time()
     t = str(t).encode()
     h = shake_256(t)
-    h = h.hexdigest(5) # output len: 2*5=10
+    h = h.hexdigest(5)  # output len: 2*5=10
     return h.upper()
+
 
 def setup(seed):
     torch.manual_seed(seed)
@@ -46,6 +48,7 @@ def setup(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+
 if __name__ == "__main__":
 
     logger = logging.getLogger()
@@ -53,7 +56,8 @@ if __name__ == "__main__":
 
     # Parse arguments
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("-c", "--config", default="config.yaml", help="the config file to be used to run the experiment", required=True)
+    arg_parser.add_argument("-c", "--config", default="config.yaml",
+                            help="the config file to be used to run the experiment", required=True)
     arg_parser.add_argument("--verbose", action='store_true', help="Log also to stdout")
     arg_parser.add_argument("--debug", action='store_true', help="debug, no wandb")
     args = arg_parser.parse_args()
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     # start wandb
     wandb.init(
         project="segment_task",
-        #entity="maxillo",
+        # entity="maxillo",
         config=unmunchify(config)
     )
 
@@ -152,55 +156,62 @@ if __name__ == "__main__":
         logging.error(f'Checkpoint file does not exist: {experiment.config.trainer.checkpoint}')
         raise SystemExit
 
+    if config.experiment.name == 'Regression':
+        best = float('inf')
+    elif config.experiment.name == 'Segmentation':
+        best = float('-inf')
 
     best_val = {
-        'value': float('-inf'),
+        'value': best,
         'epoch': -1
     }
     best_test = {
-        'value': float('-inf'),
+        'value': best,
         'epoch': -1
     }
-
 
     # Train the model
     if config.trainer.do_train:
         logging.info('Training...')
         assert experiment.epoch < config.trainer.epochs
-        for epoch in range(experiment.epoch, config.trainer.epochs+1):
+        for epoch in range(experiment.epoch, config.trainer.epochs + 1):
             experiment.train()
 
-            val_iou, val_dice = experiment.test(phase="Validation")
-            logging.info(f'Epoch {epoch} Val IoU: {val_iou}')
-            logging.info(f'Epoch {epoch} Val Dice: {val_dice}')
+            val_metrics = experiment.test(phase="Validation")
+            for val_metric, value in val_metrics.items():
+                logging.info(f'Epoch {epoch} Val {val_metric}: {value}')
 
-            if val_iou < 1e-05 and experiment.epoch > 15:
+            # TODO: check if experiment name corresponds to eval_metric in yaml otherwise raise an error somewhere idk
+            if config.experiment.name == 'Regression':
+                config.experiment.metric_of_interest = 'mse'
+            elif config.experiment.name == 'Segmentation':
+                config.experiment.metric_of_interest = 'iou'
+            val_evaluation_metric = val_metrics[config.experiment.metric_of_interest]
+
+            if val_evaluation_metric < 1e-05 and experiment.epoch > 15:
                 logging.warning('WARNING: drop in performances detected.')
 
-            optim_name = experiment.optimizer.name
-            sched_name = experiment.scheduler.name
-
             if experiment.scheduler is not None:
-                if optim_name == 'SGD' and sched_name == 'Plateau':
-                    experiment.scheduler.step(val_iou)
+                if experiment.optimizer.name == 'SGD' and experiment.scheduler.name == 'Plateau':
+                    experiment.scheduler.step(val_evaluation_metric)
                 else:
                     experiment.scheduler.step(epoch)
 
-            if epoch % 1 == 0:
-                experiment.predict_series(phase='Validation', rnd=True)
-
+            #if epoch % 1 == 0:
+            #    experiment.predict_series(phase='Validation', rnd=True)
 
             experiment.save('last.pth')
 
-            if val_iou > best_val['value']:
-                best_val['value'] = val_iou
+            if (config.experiment.name == 'Regression' and val_evaluation_metric < best_val['value']) or (config.experiment.name == 'Segmentation' and val_evaluation_metric > best_val['value']):
+                best_val['value'] = val_evaluation_metric
+                logging.info(f'New best: {val_evaluation_metric}')
                 best_val['epoch'] = epoch
                 experiment.save('best.pth')
 
             experiment.epoch += 1
 
         logging.info(f'''
-                Best validation IoU found: {best_val['value']} at epoch: {best_val['epoch']}
+                Best validation {config.experiment.metric_of_interest} found: {best_val['value']} at epoch: {best_val['epoch']}
                 ''')
 
     # Test the model
@@ -214,7 +225,7 @@ if __name__ == "__main__":
     if config.trainer.do_inference:
         logging.info('Doing inference...')
         experiment.load()
-        experiment.inference(os.path.join(config.data_loader.dataset,'SPARSE'))
+        experiment.inference(os.path.join(config.data_loader.dataset, 'SPARSE'))
         # experiment.inference('/homes/llumetti/out')
 
     # Do the prediction

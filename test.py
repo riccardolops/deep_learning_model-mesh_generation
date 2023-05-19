@@ -1,4 +1,5 @@
-import os
+import numpy as np
+import torch
 from dataloader.AugFactory import AugFactory
 import torchio as tio
 import yaml
@@ -6,23 +7,19 @@ import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider
 from scipy.ndimage import distance_transform_edt
+from utils.utils import bin2dist_disp
 matplotlib.use('GTK3Agg')
 
 with open('configs/preprocessing.yaml', 'r') as preproc_file:
     preproc = yaml.load(preproc_file, yaml.FullLoader)
 preprocessing = AugFactory(preproc).get_transform()
 
-path_origin = '/home/rlops/datasets/AVT/Dongyang/D1/D1.nrrd'
-path_origin_mask = '/home/rlops/datasets/AVT/Dongyang/D1/D1.seg.nrrd'
+path_origin = '/home/rlops/datasets/Task02_Heart/imagesTr/la_003.nii.gz'
+path_origin_mask = '/home/rlops/datasets/Task02_Heart/labelsTr/la_003.nii.gz'
 
-datafile = os.path.splitext(path_origin)[1]
-if datafile == '.nrrd':
-    from utils.utils import nrrd_reader as ex_reader
-elif datafile == '.nii.gz':
-    from utils.utils import nib_reader as ex_reader
 subject_dict = {
-    'data': preprocessing(tio.ScalarImage(path_origin, reader=ex_reader)),
-    'dense': tio.LabelMap(path_origin_mask, reader=ex_reader),
+    'data': preprocessing(tio.ScalarImage(path_origin)),
+    'dense': tio.LabelMap(path_origin_mask),
 }
 
 ct_scan_data = subject_dict['data'].data[0]
@@ -33,18 +30,25 @@ extent = (
     0,
     ct_scan_data.shape[1] * spacing[1]
 )
-mask = subject_dict['dense'].data[0]
+mask = subject_dict['dense'].data[0].bool()
 
 dist_transform = distance_transform_edt(mask)
+dist_transform_inv = -1*distance_transform_edt(~mask)
+dist_transform = dist_transform + dist_transform_inv
+ma = np.maximum(abs(dist_transform.min()),abs(dist_transform.max()))
+rescale = tio.transforms.RescaleIntensity(out_min_max=(-1,1),in_min_max=(-ma,ma))
+dist_transform = torch.tensor(dist_transform).unsqueeze(0)
+dist_transform = rescale(dist_transform)
+dist_transform = dist_transform.squeeze().numpy()
 
 fig, (ax_ct, ax_mask, ax_dist) = plt.subplots(1, 3, figsize=(18, 6))
 
 
 # Display the initial slice (assuming the slice index is 0)
-current_slice = 0
+current_slice = 140
 img = ax_ct.imshow(ct_scan_data[current_slice], cmap='gray', extent=extent)
 img_mask = ax_mask.imshow(mask[current_slice], cmap='binary', interpolation='nearest', vmin=0, vmax=1, extent=extent)
-img_dist = ax_dist.imshow(dist_transform[current_slice], cmap='jet', vmin=0.0, vmax=dist_transform.max(), extent=extent)
+img_dist = ax_dist.imshow(dist_transform[current_slice], cmap='jet', vmin=dist_transform.min(), vmax=dist_transform.max(), extent=extent)
 
 ax_ct.set_title('CT Scan')
 ax_ct.set_xlabel('X')
@@ -75,5 +79,5 @@ slider.on_changed(update_slice)
 
 # Show the plot
 plt.show()
-
+bin2dist_disp(path_origin_mask)
 print('1')

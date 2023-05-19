@@ -43,7 +43,10 @@ class Experiment:
 
         filename = 'splits.json'
 
-        num_classes = len(self.config.data_loader.labels)
+        if self.config.data_loader.labels is not None:
+            num_classes = len(self.config.data_loader.labels)
+        else:
+            num_classes = 1
         if 'Jaccard' in self.config.loss.name or num_classes == 2:
             num_classes = 1
 
@@ -157,7 +160,7 @@ class Experiment:
         if phase=='Test':
             gt = []
         else:
-            gt = patch['dense'][tio.DATA].float().cuda()
+            gt = patch['dist'][tio.DATA].float().cuda()
 
         if 'Generation' in self.__class__.__name__:
             sparse = patch['sparse'][tio.DATA].float().cuda()
@@ -185,7 +188,7 @@ class Experiment:
 
             partition_weights = 1
             # TODO: Do only if not Competitor
-            gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
+            gt_count = torch.sum(gt, dim=list(range(1, gt.ndim)))
             if torch.sum(gt_count) == 0: continue
             partition_weights = (eps + gt_count) / torch.max(gt_count)
 
@@ -198,28 +201,29 @@ class Experiment:
             loss.backward()
             self.optimizer.step()
 
-            preds = (preds > 0.5).squeeze().detach()
+            if self.config.experiment.name == 'Segmentation':
+                preds = (preds > 0.5).squeeze().detach()
+            else:
+                preds = preds.squeeze().detach()
 
             gt = gt.squeeze()
             self.evaluator.compute_metrics(preds, gt)
 
         epoch_train_loss = sum(losses) / len(losses)
-        epoch_iou, epoch_dice = self.evaluator.mean_metric(phase='Train')
+        epoch_metrics = self.evaluator.mean_metric()
 
-        self.metrics['Train'] = {
-            'iou': epoch_iou,
-            'dice': epoch_dice,
-        }
+        self.metrics['Train'] = {metric: value for metric, value in epoch_metrics.items()}
 
-        wandb.log({
+        log = {
             f'Epoch': self.epoch,
             f'Train/Loss': epoch_train_loss,
-            f'Train/Dice': epoch_dice,
-            f'Train/IoU': epoch_iou,
             f'Train/Lr': self.optimizer.param_groups[0]['lr']
-        })
+        }
+        for metric, value in epoch_metrics.items():
+            log[f'Train/{metric}'] = value
+        wandb.log(log)
 
-        return epoch_train_loss, epoch_iou
+        return epoch_train_loss
 
 
     def test(self, phase):
@@ -266,34 +270,31 @@ class Experiment:
                 losses.append(loss.item())
 
                 output = output.squeeze(0)
-                output = (output > 0.5)
+                if self.config.experiment.name == 'Segmentation':
+                    output = (output > 0.5)
 
                 self.evaluator.compute_metrics(output, gt)
 
             epoch_loss = sum(losses) / len(losses)
-            epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
+            epoch_metrics = self.evaluator.mean_metric()
 
-            wandb.log({
+            log = {
                 f'Epoch': self.epoch,
-                f'{phase}/Loss': epoch_loss,
-                f'{phase}/Dice': epoch_dice,
-                f'{phase}/IoU': epoch_iou
-            })
+                f'{phase}/Loss': epoch_loss
+            }
+            for metric, value in epoch_metrics.items():
+                log[f'{phase}/{metric}'] = value
+            wandb.log(log)
 
-            return epoch_iou, epoch_dice
+            return epoch_metrics
 
     def predict(self, path_origin):
         # TODO: Redo but only for one image
         self.model.eval()
         with torch.inference_mode():
-            datafile = os.path.splitext(path_origin)[1]
-            if datafile == '.nrrd':
-                from utils.utils import nrrd_reader as ex_reader
-            elif datafile == '.nii.gz':
-                from utils.utils import nib_reader as ex_reader
             subject_dict = {
-                'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin, reader=ex_reader)),
-                'dense': tio.LabelMap(path_origin, reader=ex_reader),
+                'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin)),
+                'dense': tio.LabelMap(path_origin),
             }
             subject = tio.Subject(**subject_dict)
             sampler = tio.inference.GridSampler(
@@ -312,7 +313,7 @@ class Experiment:
             output = aggregator.get_output_tensor()
 
             output = output.squeeze(0)
-            output = (output > 0.5)
+            #output = (output > 0.5)
             output_img = nib.Nifti1Image(output.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
             save_path = os.path.join(self.config.project_dir, self.config.title, 'output')
             if not os.path.exists(save_path):

@@ -2,7 +2,7 @@ Deep Learning Model Generation
 ========
 <!---
 <figure>
- <img style="float: left" src="imgs/frontside.jpg" alt="Side view" width="100%">
+ <img style="float: left" src="imgs/.jpg" alt="Side view" width="100%">
  <figcaption><em>Front and side views of a densely annotated IAN</em></figcaption>
 </figure>
 -->

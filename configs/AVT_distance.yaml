@@ -1,5 +1,5 @@
-title: Heart_distance_eval
-project_dir: '/homes/rlops/segment_task'
+title: Heart_distance_test
+project_dir: '/homes/rlops/regression'
 seed: 42
 
 experiment:
@@ -44,11 +44,11 @@ optimizer:
   name: SGD
 
 trainer:
-  reload: True
-  checkpoint: '/homes/rlops/segment_task/Heart_distance_test_CCE933350A/checkpoints/last.pth'
-  do_train: False
+  reload: False
+  checkpoint: ''
+  do_train: True
   do_test: False
   do_inference: False
-  do_prediction: True
-  predict: '/homes/rlops/Task02_Heart/imagesTr/la_003.nii.gz'
+  do_prediction: False
+  predict: ''
   epochs: 100
