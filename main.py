@@ -186,8 +186,8 @@ if __name__ == "__main__":
                 else:
                     experiment.scheduler.step(epoch)
 
-            if epoch % 1 == 0:
-                experiment.predict_series(phase='Validation', rnd=True)
+            #if epoch % 1 == 0:
+            #    experiment.predict_series(phase='Validation', rnd=True)
 
 
             experiment.save('last.pth')

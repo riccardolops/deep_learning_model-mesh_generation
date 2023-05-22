@@ -34,23 +34,18 @@ from schedulers.SchedulerFactory import SchedulerFactory
 from eval import Eval as Evaluator
 
 eps = 1e-10
-class Experiment:
+class Regression:
     def __init__(self, config, debug=False):
         self.config = config
         self.debug = debug
         self.epoch = 0
         self.metrics = {}
 
-        filename = 'splits.json'
-
-        num_classes = len(self.config.data_loader.labels)
-        if 'Jaccard' in self.config.loss.name or num_classes == 2:
-            num_classes = 1
-
         # load model
         model_name = self.config.model.name
-        in_ch = 2 if self.config.experiment.name == 'Generation' else 1
+        in_ch = 1
         emb_shape = [dim // 8 for dim in self.config.data_loader.patch_shape]
+        num_classes = 1
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
         self.model = nn.DataParallel(self.model)

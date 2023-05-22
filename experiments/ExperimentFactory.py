@@ -1,5 +1,6 @@
 from .segmentation import Segmentation
 from .generation import Generation
+from .regression import Regression
 
 class ExperimentFactory:
     def __init__(self, config, debug=False):
@@ -12,6 +13,8 @@ class ExperimentFactory:
             experiment = Segmentation(self.config, self.debug)
         elif self.name == 'Generation':
             experiment = Generation(self.config, self.debug)
+        elif self.name == 'Regression':
+            experiment = Regression(self.config, self.debug)
         else:
             raise ValueError(f'Experiment \'{self.name}\' not found')
         return experiment

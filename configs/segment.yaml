@@ -1,4 +1,4 @@
-title: log_image_ok
+title: segment_image
 project_dir: '/homes/rlops/segment_task'
 seed: 42
 
@@ -7,7 +7,7 @@ experiment:
 
 data_loader:
   dataset_name: Heart
-  dataset: /homes/rlops/alveolar_canal/Task02_Heart
+  dataset: /homes/rlops/Task02_Heart
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
@@ -44,11 +44,11 @@ optimizer:
   name: SGD
 
 trainer:
-  reload: False
-  checkpoint: ''
+  reload: True
+  checkpoint: '/homes/rlops/segment_task/segment_image_F8B84509C3/checkpoints/best.pth'
   do_train: True
   do_test: False
   do_inference: False
   do_prediction: False
   predict: ''
-  epochs: 10
+  epochs: 100
