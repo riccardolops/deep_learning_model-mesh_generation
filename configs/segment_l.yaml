@@ -1,13 +1,13 @@
-title: log_image_ok
-project_dir: '/home/rlops/dlms'
+title: d_segment_image
+project_dir: '/homes/rlops/segment_task'
 seed: 42
 
 experiment:
-  name: Segmentation
+  name: Regression
 
 data_loader:
   dataset_name: Heart
-  dataset: /homes/rlops/alveolar_canal/Task02_Heart
+  dataset: /homes/rlops/Task02_Heart
   training_set: null
   preprocessing: configs/preprocessing.yaml
   augmentations: configs/augmentations.yaml
@@ -31,10 +31,13 @@ data_loader:
   volumes_min: 0
 
 model:
-  name: PosPadUNet3D
+  name: PosPadUNet3DDist
 
-loss:
+loss_seg:
   name: Jaccard
+
+loss_reg:
+  name: MSE
 
 lr_scheduler:
   name: Plateau
@@ -44,11 +47,11 @@ optimizer:
   name: SGD
 
 trainer:
-  reload: False
-  checkpoint: ''
-  do_train: True
+  reload: True
+  checkpoint: '/homes/rlops/segment_task/d_segment_image_1C17C8A5BE/checkpoints/last.pth'
+  do_train: False
   do_test: False
   do_inference: False
-  do_prediction: False
-  predict: ''
-  epochs: 10
+  do_prediction: True
+  predict: '/homes/rlops/Task02_Heart/imagesTr/la_003.nii.gz'
+  epochs: 100

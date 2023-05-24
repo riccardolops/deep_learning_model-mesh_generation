@@ -41,11 +41,14 @@ class Regression:
         self.epoch = 0
         self.metrics = {}
 
+        num_classes = len(self.config.data_loader.labels)
+        if 'Jaccard' in self.config.loss_seg.name or num_classes == 2:
+            num_classes = 1
+
         # load model
         model_name = self.config.model.name
-        in_ch = 1
+        in_ch = 2 if self.config.experiment.name == 'Generation' else 1
         emb_shape = [dim // 8 for dim in self.config.data_loader.patch_shape]
-        num_classes = 1
 
         self.model = ModelFactory(model_name, num_classes, in_ch, emb_shape).get().cuda()
         self.model = nn.DataParallel(self.model)
@@ -75,7 +78,7 @@ class Regression:
         ).get()
 
         # load loss
-        self.loss = LossFactory(self.config.loss.name, self.config.data_loader.labels)
+        self.loss = LossFactory(self.config.loss_seg.name, self.config.loss_reg.name, self.config.data_loader.labels)
 
         # load evaluator
         self.evaluator = Evaluator(self.config, skip_dump=True)
@@ -98,18 +101,10 @@ class Regression:
             transform=self.config.data_loader.preprocessing,
             # dist_map=['sparse', 'dense']
         ).get()
-        self.test_dataset = DatasetFactory(
-            dataset_name=self.config.data_loader.dataset_name,
-            root=self.config.data_loader.dataset,
-            splits='test',
-            transform=self.config.data_loader.preprocessing,
-            # dist_map=['sparse', 'dense']
-        ).get()
 
         # queue start loading when used, not when instantiated
         self.train_loader = self.train_dataset.get_loader(self.config.data_loader)
         self.val_loader = self.val_dataset.get_loader(self.config.data_loader)
-        self.test_loader = self.test_dataset.get_loader(self.config.data_loader)
 
 
         if self.config.trainer.reload:
@@ -148,24 +143,20 @@ class Regression:
             self.metrics = state['metrics']
 
     def extract_data_from_patch(self, patch, phase=None):
-        volume = patch['data'][tio.DATA].float().cuda()
+        images = patch['data'][tio.DATA].float().cuda()
         if phase=='Test':
-            gt = []
+            gt_seg = []
+            gt_dis = []
         else:
-            gt = patch['dense'][tio.DATA].float().cuda()
-
-        if 'Generation' in self.__class__.__name__:
-            sparse = patch['sparse'][tio.DATA].float().cuda()
-            images = torch.cat([volume, sparse], dim=1)
-        else:
-            images = volume
+            gt_seg = patch['dense'][tio.DATA].float().cuda()
+            gt_dis = patch['distance'][tio.DATA].float().cuda()
 
         emb_codes = torch.cat((
             patch[tio.LOCATION][:,:3],
             patch[tio.LOCATION][:,:3] + torch.as_tensor(images.shape[-3:])
         ), dim=1).float().cuda()
 
-        return images, gt, emb_codes
+        return images, gt_seg, gt_dis, emb_codes
 
     def train(self):
 
@@ -176,27 +167,28 @@ class Regression:
 
         losses = []
         for i, d in tqdm(enumerate(data_loader), total=len(data_loader), desc=f'Train epoch {str(self.epoch)}'):
-            images, gt, emb_codes = self.extract_data_from_patch(d)
+            images, gt_seg, gt_dis, emb_codes = self.extract_data_from_patch(d)
 
             partition_weights = 1
             # TODO: Do only if not Competitor
-            gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
+            gt_count = torch.sum(gt_seg == 1, dim=list(range(1, gt_seg.ndim)))
             if torch.sum(gt_count) == 0: continue
             partition_weights = (eps + gt_count) / torch.max(gt_count)
 
             self.optimizer.zero_grad()
-            preds = self.model(images, emb_codes)
+            preds_seg, preds_dis = self.model(images, emb_codes)
 
-            assert preds.ndim == gt.ndim, f'Gt and output dimensions are not the same before loss. {preds.ndim} vs {gt.ndim}'
-            loss = self.loss(preds, gt, partition_weights)
+            assert preds_seg.ndim == gt_seg.ndim, f'Gt of segmentation and output dimensions are not the same before loss. {preds_seg.ndim} vs {gt_seg.ndim}'
+            assert preds_dis.ndim == gt_dis.ndim, f'Gt of distance and output dimensions are not the same before loss. {preds_dis.ndim} vs {gt_dis.ndim}'
+            loss = self.loss(preds_seg, gt_seg, preds_dis, gt_dis, partition_weights)
             losses.append(loss.item())
             loss.backward()
             self.optimizer.step()
 
-            preds = (preds > 0.5).squeeze().detach()
+            preds_seg = (preds_seg > 0.5).squeeze().detach()
 
-            gt = gt.squeeze()
-            self.evaluator.compute_metrics(preds, gt)
+            gt_seg = gt_seg.squeeze()
+            self.evaluator.compute_metrics(preds_seg, gt_seg)
 
         epoch_train_loss = sum(losses) / len(losses)
         epoch_iou, epoch_dice = self.evaluator.mean_metric(phase='Train')
@@ -238,31 +230,37 @@ class Regression:
                         0
                 )
                 loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-                aggregator = tio.inference.GridAggregator(sampler)
-                gt_aggregator = tio.inference.GridAggregator(sampler)
+                aggregator_seg = tio.inference.GridAggregator(sampler)
+                aggregator_dis = tio.inference.GridAggregator(sampler)
+                gt_seg_aggregator = tio.inference.GridAggregator(sampler)
+                gt_dis_aggregator = tio.inference.GridAggregator(sampler)
 
                 for j, patch in enumerate(loader):
-                    images, gt, emb_codes = self.extract_data_from_patch(patch)
+                    images, gt_seg, gt_dis, emb_codes = self.extract_data_from_patch(patch)
 
-                    preds = self.model(images, emb_codes)
-                    aggregator.add_batch(preds, patch[tio.LOCATION])
-                    gt_aggregator.add_batch(gt, patch[tio.LOCATION])
+                    preds_seg, preds_dis = self.model(images, emb_codes)
+                    aggregator_seg.add_batch(preds_seg, patch[tio.LOCATION])
+                    aggregator_dis.add_batch(preds_dis, patch[tio.LOCATION])
+                    gt_seg_aggregator.add_batch(gt_seg, patch[tio.LOCATION])
+                    gt_dis_aggregator.add_batch(gt_dis, patch[tio.LOCATION])
 
-                output = aggregator.get_output_tensor()
-                gt = gt_aggregator.get_output_tensor()
+                output_seg = aggregator_seg.get_output_tensor()
+                output_dis = aggregator_dis.get_output_tensor()
+                gt_seg = gt_seg_aggregator.get_output_tensor()
+                gt_dis = gt_dis_aggregator.get_output_tensor()
                 partition_weights = 1
 
-                gt_count = torch.sum(gt == 1, dim=list(range(1, gt.ndim)))
+                gt_count = torch.sum(gt_seg == 1, dim=list(range(1, gt_seg.ndim)))
                 if torch.sum(gt_count) != 0:
                     partition_weights = (eps + gt_count) / (eps + torch.max(gt_count))
 
-                loss = self.loss(output.unsqueeze(0), gt.unsqueeze(0), partition_weights)
+                loss = self.loss(output_seg.unsqueeze(0), gt_seg.unsqueeze(0), output_dis.unsqueeze(0), gt_dis.unsqueeze(0), partition_weights)
                 losses.append(loss.item())
 
-                output = output.squeeze(0)
-                output = (output > 0.5)
+                output_seg = output_seg.squeeze(0)
+                output_seg = (output_seg > 0.5)
 
-                self.evaluator.compute_metrics(output, gt)
+                self.evaluator.compute_metrics(output_seg, gt_seg)
 
             epoch_loss = sum(losses) / len(losses)
             epoch_iou, epoch_dice = self.evaluator.mean_metric(phase=phase)
@@ -280,10 +278,10 @@ class Regression:
         # TODO: Redo but only for one image
         self.model.eval()
         with torch.inference_mode():
-            dataset = self.train_dataset
             subject_dict = {
                 'data': self.config.data_loader.preprocessing(tio.ScalarImage(path_origin)),
                 'dense': tio.LabelMap(path_origin),
+                'distance': tio.ScalarImage(path_origin),
             }
             subject = tio.Subject(**subject_dict)
             sampler = tio.inference.GridSampler(
@@ -292,22 +290,30 @@ class Regression:
                 0
             )
             loader = DataLoader(sampler, batch_size=self.config.data_loader.batch_size)
-            aggregator = tio.inference.GridAggregator(sampler)
+            aggregator_seg = tio.inference.GridAggregator(sampler)
+            aggregator_dis = tio.inference.GridAggregator(sampler)
 
             for j, patch in enumerate(loader):
-                images, gt, emb_codes = self.extract_data_from_patch(patch, phase='Test')
-                preds = self.model(images, emb_codes)
-                aggregator.add_batch(preds, patch[tio.LOCATION])
+                images, gt_seg, gt_dis, emb_codes = self.extract_data_from_patch(patch, phase='Test')
+                preds_seg, preds_dis = self.model(images, emb_codes)
+                aggregator_seg.add_batch(preds_seg, patch[tio.LOCATION])
+                aggregator_dis.add_batch(preds_dis, patch[tio.LOCATION])
 
-            output = aggregator.get_output_tensor()
+            output_seg = aggregator_seg.get_output_tensor()
+            output_dis = aggregator_dis.get_output_tensor()
 
-            output = output.squeeze(0)
-            output = (output > 0.5)
-            output_img = nib.Nifti1Image(output.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
+            output_seg = output_seg.squeeze(0)
+            output_dis = output_dis.squeeze(0)
+            output_seg = (output_seg > 0.5)
+            output_im_seg = nib.Nifti1Image(output_seg.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
+            output_im_dis = nib.Nifti1Image(output_dis.squeeze(0), nib.load(path_origin).affine, nib.load(path_origin).header)
             save_path = os.path.join(self.config.project_dir, self.config.title, 'output')
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             filename = os.path.basename(path_origin)
-            path = os.path.join(save_path, filename)
+            path = os.path.join(save_path, 'seg' + filename)
             print(f'Saving to: {path}')
-            nib.save(output_img, path)
+            nib.save(output_im_seg, path)
+            path = os.path.join(save_path, 'dis' + filename)
+            print(f'Saving to: {path}')
+            nib.save(output_im_dis, path)

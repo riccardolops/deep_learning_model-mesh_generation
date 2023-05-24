@@ -17,6 +17,10 @@ class ModelFactory(nn.Module):
             from .PosPadUNet3D import PosPadUNet3D
             assert self.emb_shape is not None
             return PosPadUNet3D(self.num_classes, self.emb_shape, self.in_ch)
+        elif self.model_name == 'PosPadUNet3DDist':
+            from .PosPadUNet3DDist import PosPadUNet3DDist
+            assert self.emb_shape is not None
+            return PosPadUNet3DDist(self.num_classes, self.emb_shape, self.in_ch)
         elif self.model_name == 'Competitor':
             from .Competitor import Competitor
             return Competitor(self.num_classes)
