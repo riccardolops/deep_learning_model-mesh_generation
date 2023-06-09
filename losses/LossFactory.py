@@ -9,6 +9,7 @@ from .CrossEntropyLoss import CrossEntropyLoss
 from .BCEWithLogitsLoss import BCEWithLogitsLoss
 from .BoundaryLoss import BoundaryLoss
 from .MSELoss import MSELoss
+from .L1_LproductLoss import L1_LproductLoss
 
 class LossFactory:
     def __init__(self, names_seg, names_reg, classes, weights=None):
@@ -45,6 +46,8 @@ class LossFactory:
             loss_fn = BoundaryLoss()
         elif name == 'MSE':
             loss_fn = MSELoss()
+        elif name == 'L1_Lp':
+            loss_fn = L1_LproductLoss()
         else:
             raise Exception(f"Loss function {name} can't be found.")
 

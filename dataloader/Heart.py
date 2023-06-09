@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torchio as tio
 from torch.utils.data import DataLoader
-
+from torchio.transforms import RescaleIntensity
 import nibabel as nib
 
 class Heart(tio.SubjectsDataset):
@@ -24,9 +24,20 @@ class Heart(tio.SubjectsDataset):
         root = Path(root)
         if not isinstance(splits, list):
             splits = [splits]
+        self.transform = RescaleIntensity((0, 1))
 
         subjects_list = self._get_subjects_list(root, splits, dist_map)
         super().__init__(subjects_list, transform, **kwargs)
+
+    def __getitem__(self, index: int) -> tio.Subject:
+        subject = super().__getitem__(index)
+
+        # Apply transform to the image but not the label
+        if self.transform is not None:
+            transformed_image = self.transform(subject['data'])
+            subject['data'] = transformed_image
+
+        return subject
 
     def _get_subjects_list(self, root, splits, dist_map=None):
 

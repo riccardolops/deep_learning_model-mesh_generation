@@ -47,6 +47,7 @@ class PosPadUNet3DDist(nn.Module):
 
         self.final_seg = nn.ConvTranspose3d(size * 2, n_classes, kernel_size=3, padding=1, stride=1)
         self.final_reg = nn.ConvTranspose3d(size * 2, 1, kernel_size=3, padding=1, stride=1)
+        self.tanh = nn.Tanh()
         initialize_weights(self)
 
     def conv3Dblock(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=1, padding=(1, 1, 1), groups=1,
@@ -91,7 +92,7 @@ class PosPadUNet3DDist(nn.Module):
 
         h_seg = self.final_seg(h)
         h_reg = self.final_reg(h)
-        out_reg = torch.sigmoid(h_reg)
+        out_reg = self.tanh(h_reg)
         out_seg = torch.sigmoid(h_seg)
         return out_seg, out_reg
 

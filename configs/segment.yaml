@@ -1,4 +1,4 @@
-title: g_segment_image
+title: segment_image_c
 project_dir: '/homes/rlops/segment_task'
 seed: 42
 
@@ -34,10 +34,10 @@ model:
   name: PosPadUNet3DDist
 
 loss_seg:
-  name: Jaccard
+  name: DiceLoss
 
 loss_reg:
-  name: MSE
+  name: L1_Lp
 
 lr_scheduler:
   name: Plateau
@@ -47,7 +47,7 @@ optimizer:
   name: SGD
 
 trainer:
-  reload: True
+  reload: False
   checkpoint: '/homes/rlops/segment_task/g_segment_image_0FC4810EE7/checkpoints/best.pth'
   do_train: True
   do_test: False

@@ -32,6 +32,7 @@ from models.ModelFactory import ModelFactory
 from optimizers.OptimizerFactory import OptimizerFactory
 from schedulers.SchedulerFactory import SchedulerFactory
 from eval import Eval as Evaluator
+from utils.utils import Approximated_Heaviside
 
 eps = 1e-10
 class Regression:
@@ -178,6 +179,10 @@ class Regression:
             self.optimizer.zero_grad()
             preds_seg, preds_dis = self.model(images, emb_codes)
 
+            approx_heaviside = Approximated_Heaviside()
+
+            preds_seg = approx_heaviside(preds_dis)
+
             assert preds_seg.ndim == gt_seg.ndim, f'Gt of segmentation and output dimensions are not the same before loss. {preds_seg.ndim} vs {gt_seg.ndim}'
             assert preds_dis.ndim == gt_dis.ndim, f'Gt of distance and output dimensions are not the same before loss. {preds_dis.ndim} vs {gt_dis.ndim}'
             loss = self.loss(preds_seg, gt_seg, preds_dis, gt_dis, partition_weights)
@@ -239,6 +244,9 @@ class Regression:
                     images, gt_seg, gt_dis, emb_codes = self.extract_data_from_patch(patch)
 
                     preds_seg, preds_dis = self.model(images, emb_codes)
+                    approx_heaviside = Approximated_Heaviside()
+
+                    preds_seg = approx_heaviside(preds_dis)
                     aggregator_seg.add_batch(preds_seg, patch[tio.LOCATION])
                     aggregator_dis.add_batch(preds_dis, patch[tio.LOCATION])
                     gt_seg_aggregator.add_batch(gt_seg, patch[tio.LOCATION])
