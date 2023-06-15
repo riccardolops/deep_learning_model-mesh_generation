@@ -1,10 +1,16 @@
 import torch
 from scipy.ndimage import distance_transform_edt
-from skimage import segmentation as skimage_seg #addboundary
 import numpy as np
 import torchio as tio
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
+
+def bin2dist1(mask):
+    dist_transform = distance_transform_edt(mask.data[0].bool(), sampling=[abs(mask.affine[0][0]), abs(mask.affine[1][1]), abs(mask.affine[2][2])])
+    dist_transform = torch.tensor(dist_transform).unsqueeze(0)
+    dist_transform = dist_transform.squeeze().numpy()
+    dist = tio.ScalarImage(path=mask.path, tensor=np.expand_dims(dist_transform, axis=0), affine=mask.affine)
+    return dist
 
 
 def bin2dist(mask):

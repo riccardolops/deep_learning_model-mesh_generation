@@ -53,8 +53,8 @@ elif outputDim < inputDim:
     x_cloud_np = x_cloud_np[:outputDim]
 
 learningRate = 10
-epochs = 400
-checkpoint_period = 2
+epochs = 401
+checkpoint_period = 100
 epsilon = 5
 step_size = 300
 n_points = x_cloud_np.shape[0]
@@ -100,9 +100,9 @@ x_cloud = x_cloud.offset(offset_const.repeat(n_points, 1).detach())
 x_model.points += offset_const.repeat(x_model.n_points, 1).detach().numpy()
 pv.plot(x_cloud.points_packed().detach().numpy().astype(np.float32))
 
-weight = torch.tensor(10., requires_grad=True)
+weight = 0.00005
 
-plotter = pv.Plotter(notebook=False, off_screen=True)
+plotter = pv.Plotter(notebook=False)
 plotter.add_text("X", font_size=30, color='#00FF00')
 plotter.add_points(x_cloud.points_packed().detach().numpy().astype(np.float32), color='#00FF00')
 plotter.add_mesh(x_model, opacity=0.10, color='#00FF00')
@@ -114,26 +114,29 @@ camera.SetFocalPoint(y_model.center_of_mass())
 camera.Azimuth(160)
 camera.Elevation(-30)
 camera.zoom(0.9)
-plotter.open_gif("reg_10.gif")
-plotter.write_frame()
+#plotter.open_gif("reg_p.gif")
+#plotter.write_frame()
 
 for epoch in tqdm(range(epochs)):
     optimizer.zero_grad()
     output = x_cloud.offset(offset_parameters)
     loss_chamfer, _ = chamfer_distance(output.points_packed().unsqueeze(0).float(), y_cloud.points_packed().unsqueeze(0).float())
     loss_distance = torch.sum(torch.sqrt(torch.sum(offset_parameters ** 2, dim=1)))
-    loss = weight * loss_chamfer + loss_distance
+    loss = loss_chamfer + weight * loss_distance
     if epoch % checkpoint_period == 0:
         print('LR: {}'.format(optimizer.param_groups[0]['lr']))
         checkpoints.append(output.points_packed().detach().numpy().astype(np.float32))
         # plot_pointcloud(output.points_packed().detach(), 'epoch {}'.format(epoch))
+        plotter = pv.Plotter(notebook=False)
         plotter.add_text("X", font_size=30, color='#00FF00')
         plotter.add_points(output.points_packed().detach().numpy().astype(np.float32), color='#00FF00')
         plotter.add_mesh(x_model, opacity=0.10, color='#00FF00')
         plotter.add_text("Target", font_size=30, color='#FF0000', position='upper_right')
         plotter.add_mesh(y_model, opacity=0.10, color='#FF0000')
-        plotter.write_frame()
+        #plotter.write_frame()
+        plotter.show()
         plotter.clear()
+
     writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
     writer.add_scalar('loss', loss, epoch)
     loss.backward()
@@ -142,7 +145,6 @@ for epoch in tqdm(range(epochs)):
     scheduler1.step()
     scheduler2.step()
     print('epoch {}, loss_chamfer {}'.format(epoch, loss_chamfer.item()))
-    print('epoch {}, weight_distance {}'.format(epoch, weight.item()))
     print('epoch {}, loss_distance {}'.format(epoch, loss_distance.item()))
     print('epoch {}, loss {}'.format(epoch, loss.item()))
 

@@ -24,7 +24,7 @@ mcs_mesh.vertices = o3d.utility.Vector3dVector(mcs_vert)
 mcs_mesh.triangles = o3d.utility.Vector3iVector(mcs_tri)
 
 otmesh = trimesh.Trimesh(np.asarray(mcs_mesh.vertices), faces=np.asarray(mcs_mesh.triangles)).apply_scale(1)
-output_file = 'mesh.off'
+output_file = 'D2.off'
 off_data = export_off(otmesh, 0)
 with open(output_file, 'w') as file:
     file.write(off_data)
